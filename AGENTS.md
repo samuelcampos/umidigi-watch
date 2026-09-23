@@ -7,6 +7,32 @@ will waste your afternoon if you don't know it.**
 Read `PROTOCOL.md` §0 ("Confirmed against real hardware") before changing
 anything in `uwatch/protocol.py`.
 
+## Rule 1: never commit without the user reviewing it first
+
+**Do not run `git commit` or `git push` on your own initiative.** This is not a
+soft preference. The owner reviews every change by hand before it enters history.
+
+The required sequence is:
+
+1. Make the changes and get the tests passing.
+2. Stage them: `git add -A`.
+3. **Show the user the actual diff** (`git --no-pager diff --staged`) and the
+   proposed commit message, then **stop and wait**. Ask explicitly for approval.
+4. Commit only once they have said yes, and treat `git push` as a **separate**
+   question asked after the commit exists.
+
+"I'll commit it and you can revert" is not acceptable. Neither is committing
+because it feels like a natural stopping point, because the task looks finished,
+or because a previous commit in this repo was made that way. Staging and then
+asking costs nothing; an unreviewed commit costs the user their review.
+
+If you have already committed before reading this: say so plainly, and offer
+`git reset --soft HEAD~1` to put the change back in the staging area for review.
+Never rewrite history that has already been pushed without asking.
+
+Applies equally to amends, rebases, tags, branch deletions and anything else
+that mutates history or the remote.
+
 ## What this is
 
 A local macOS CLI that configures a UMIDIGI Uwatch 5S over BLE, replacing the
