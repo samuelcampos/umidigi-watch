@@ -193,3 +193,21 @@ This is interoperability work on hardware the user owns, derived from a freely
 distributed APK. No vendor code is redistributed — the cipher was reimplemented
 from scratch. Keep it that way: do not commit the APK, DEX, native libraries or
 decompiled sources (`.gitignore` already blocks `research/oyefit/`).
+
+**Never commit the real watch's identifiers.** The device belongs to a child.
+Its BD_ADDR, its advertised name suffix and its CoreBluetooth peripheral UUID
+are personal data and must not enter the repository, the docs, the blog post or
+a commit message — not even in an example or a debug paste. Use the placeholder
+`AA:BB:CC:DD:EE:FF` / `Uwatch 5S-AABBCCDDEEFF`, which matches the synthetic test
+vectors already in `uwatch/auth.py`.
+
+The real values live only in `~/.config/uwatch5s.json`, outside the repo. That
+file is the user's own machine state — read it if you need to connect, but never
+copy its contents into anything tracked. The same applies to step history: it is
+a record of a child's movements, so keep real readings out of committed examples.
+
+Before committing, it costs one command to check:
+
+```sh
+git diff --staged | grep -inE "([0-9A-F]{2}:){5}[0-9A-F]{2}|Uwatch ?5S-[0-9A-F]{12}"
+```

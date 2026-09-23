@@ -15,3 +15,7 @@ Uwatch.app/
 # (and legally murky) to commit. See research/README.md to recreate.
 research/oyefit/
 research/web/
+
+# Unpublished blog draft — kept local on purpose.
+# Delete this line when you want to commit it.
+blog/reverse-engineering-my-kids-smartwatch.md
