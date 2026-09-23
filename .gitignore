@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+
+# Built macOS app bundle (regenerate with ./build_app.sh)
+Uwatch.app/
+
+# Reverse-engineering working material: the APK, its DEX/native libs and the
+# ~12,900 decompiled Java sources. Kept locally for reference, far too large
+# (and legally murky) to commit. See research/README.md to recreate.
+research/oyefit/
+research/web/

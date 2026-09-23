@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uwatch5s"
+version = "0.1.0"
+description = "Local control of the UMIDIGI Uwatch 5S smartwatch over Bluetooth LE"
+requires-python = ">=3.10"
+dependencies = ["bleak>=0.22"]
+
+[project.scripts]
+uwatch = "uwatch.cli:main"
+
+[tool.setuptools]
+packages = ["uwatch"]
