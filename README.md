@@ -85,7 +85,12 @@ python3.13 -m venv .venv && .venv/bin/pip install -e . pytest pytest-asyncio
 
 67 tests cover the frame codec, the FEAL-32 login crypto (against vectors taken
 from UMIDIGI's own native library), and the session logic driven by a fake watch.
-No hardware needed.
+No hardware needed — there is no Bluetooth in the test suite at all, so it runs
+anywhere, including CI.
+
+Every PR is checked by GitHub Actions: the suite runs on Linux against Python
+3.10 and 3.13, `Uwatch.app` is built and verified on macOS, and a guard rejects
+any commit containing a real watch address.
 
 Every feature above was also confirmed on a real Uwatch 5S running firmware
 `UWATCH5S_A0_V1.06_A00_0825_YM`: clock, alarms, step history and watch face.

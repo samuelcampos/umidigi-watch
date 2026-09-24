@@ -72,6 +72,31 @@ from the bundle every build**. Always run tests from the separate `.venv/`.
 `Uwatch.app/` is gitignored and its internal paths are absolute — it must be
 rebuilt after a clone or a move.
 
+## CI
+
+`.github/workflows/ci.yml` runs on every PR and push to `main`:
+
+| Job | Runner | What it does |
+|---|---|---|
+| `test` | ubuntu | Full suite on Python 3.10 and 3.13, plus an import check |
+| `privacy` | ubuntu | Fails if a real watch MAC or name suffix is committed |
+| `build` | macOS | Runs the suite, builds `Uwatch.app`, asserts the bundle invariants |
+
+**No test needs Bluetooth or the watch.** `test_protocol.py` is pure functions;
+`test_client.py` drives a `FakeWatch`. `bleak` imports fine on Linux without
+BlueZ or D-Bus because the platform backend is resolved only when a scanner or
+client is constructed, which the tests never do. Keep it that way — if you add a
+test that needs a radio, mark it and exclude it from CI rather than making the
+whole suite hardware-dependent.
+
+The `build` job asserts the things that silently break BLE: the Bluetooth usage
+key is present, the interpreter is a real file rather than a symlink (or
+`codesign` fails), and `Contents/bin` was removed. If you change `build_app.sh`,
+change those assertions with it.
+
+If you add a new synthetic MAC to tests or docs, add it to the allow-list in the
+`privacy` job or CI will reject the PR.
+
 ## Trap 1: macOS will not let you touch Bluetooth
 
 This cost the bulk of the original session. Three independent barriers, **all**

@@ -1,0 +1,142 @@
+name: CI
+
+# The test suite never touches a radio: the protocol layer is pure functions and
+# the session tests drive a FakeWatch, so everything here runs on a hosted
+# runner with no Bluetooth adapter and no watch present.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: tests (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # pyproject declares requires-python = ">=3.10", so check both ends.
+        python-version: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . pytest pytest-asyncio
+
+      # bleak imports cleanly on Linux without BlueZ or a running D-Bus: the
+      # platform backend is only resolved when a scanner/client is constructed,
+      # which the tests never do.
+      - name: Import check
+        run: python -c "import uwatch, uwatch.client, uwatch.cli; print('imports ok')"
+
+      - name: Tests
+        run: pytest -q
+
+  privacy:
+    name: no device identifiers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The watch belongs to a child. Its BD_ADDR and advertised name are
+      # personal data and were scrubbed from this repo once already; this stops
+      # them coming back. See "Scope and conduct" in AGENTS.md.
+      - name: Check for a real watch address
+        run: |
+          set -uo pipefail
+          fail=0
+
+          # The advertised name embeds the BD_ADDR, so any suffix that is not
+          # the documented placeholder is a leak.
+          if git grep -InE 'Uwatch ?5S-[0-9A-Fa-f]{12}' -- . \
+             | grep -vi 'AABBCCDDEEFF'; then
+            echo "::error::Real watch name/BD_ADDR found above. Use 'Uwatch 5S-AABBCCDDEEFF'."
+            fail=1
+          fi
+
+          # Everything else must be one of the synthetic vectors already used by
+          # uwatch/auth.py and research/. Add new fakes here deliberately.
+          allow='AA:BB:CC:DD:EE:FF|AA:BB:CC:DD:EE:FE|00:00:00:00:00:00|00:11:22:33:44:55'
+          allow="$allow"'|01:02:03:04:05:06|12:34:56:78:9A:BC|A4:C1:38:11:22:33'
+          allow="$allow"'|C0:1A:FF:12:34:56|FF:EE:DD:CC:BB:AA|XX:XX:XX:XX:XX:XX'
+
+          unknown=$(git grep -ohE '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' -- . \
+                    | tr 'a-f' 'A-F' | sort -u | grep -vE "$allow" || true)
+          if [ -n "$unknown" ]; then
+            echo "::error::Unrecognised MAC address(es) committed:"
+            echo "$unknown"
+            echo "If these are synthetic test vectors, add them to the allow-list in this workflow."
+            fail=1
+          fi
+
+          [ "$fail" -eq 0 ] && echo "no device identifiers found"
+          exit "$fail"
+
+  build:
+    name: build Uwatch.app
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Tests on macOS
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e . pytest pytest-asyncio
+          pytest -q
+
+      - name: Build the bundle
+        run: ./build_app.sh
+
+      # The bundle is the only way this tool can reach Bluetooth, and each of
+      # these properties is load-bearing. AGENTS.md explains why.
+      - name: Verify the bundle
+        run: |
+          set -euo pipefail
+          C=Uwatch.app/Contents
+
+          exe=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$C/Info.plist")
+          echo "CFBundleExecutable = $exe"
+
+          # Without this key macOS kills the process the moment it asks for BLE.
+          /usr/libexec/PlistBuddy -c 'Print :NSBluetoothAlwaysUsageDescription' \
+            "$C/Info.plist" > /dev/null
+
+          test -x "$C/MacOS/$exe"   || { echo "missing interpreter $exe"; exit 1; }
+          test -x "$C/MacOS/uwatch-run" || { echo "missing launcher"; exit 1; }
+          test -f "$C/bundle_main.py"   || { echo "missing bundle_main.py"; exit 1; }
+
+          # codesign refuses to sign a bundle whose main executable is a symlink,
+          # which is why the venv is built with --copies.
+          if [ -L "$C/MacOS/$exe" ]; then
+            echo "interpreter is a symlink; venv must be built with --copies"; exit 1
+          fi
+
+          # pip recreates Contents/bin; it must not survive or the wrong
+          # interpreter can be picked up.
+          test ! -d "$C/bin" || { echo "Contents/bin should have been removed"; exit 1; }
+
+          # Prove the package and its dependencies import inside the bundle.
+          # This never opens a radio, so it is safe on a headless runner.
+          "$C/MacOS/$exe" -c "from uwatch import cli; cli.build_parser(); print('bundle imports ok')"
+
+          echo "bundle verified"
