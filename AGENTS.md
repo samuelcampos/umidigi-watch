@@ -112,6 +112,13 @@ of which must be cleared. Symptom of any of them: `Abort trap: 6` with
    which carries *its own* Info.plist and discards yours. Fix: copy that final
    binary into `Uwatch.app/Contents/MacOS/python3.13`. Safe because `otool -L`
    shows it links the framework by absolute path.
+   **But only if that framework is the same installation.** Where several
+   Pythons coexist (a python.org build beside Homebrew, or a GitHub macOS
+   runner) `sysconfig` can report a framework belonging to a *different*
+   install; the copied binary is then killed outright — `Killed: 9`, exit 137.
+   `build_app.sh` now swaps, checks `sys.prefix` still resolves to the bundle,
+   and reverts to the venv's own interpreter if not. Losing the swap only costs
+   the TCC grant, so falling back is better than failing the build.
 3. **TCC blames the responsible process**, not the running one. Launched from a
    terminal or from the Copilot app, `responsibleProc` is *that* app and the
    grant never applies. Fix: launch via
@@ -161,6 +168,12 @@ arrived at by elimination.
 
 ## Trap 3: the launcher plumbing
 
+* **Python 3.10 has a different `asyncio.TimeoutError`.** Before 3.11 it is its
+  own class, not an alias of the built-in, so an escaping `wait_for` timeout
+  slips past `except TimeoutError` in `cli.py` and the user gets a raw
+  traceback instead of a message. Every timeout must be funnelled through
+  `Uwatch._next_reply()`, which converts it. `pyproject.toml` claims 3.10
+  support and CI tests it — keep both true.
 * **Bash strings cannot contain NUL.** A `$'\x00…'` sentinel silently evaluates
   to empty and breaks the `sed` that drives output streaming. The marker is the
   literal string `__UWATCH_EXIT__` for this reason — leave it alone.

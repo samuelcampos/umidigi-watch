@@ -187,6 +187,19 @@ class Uwatch:
             await self._client.write_gatt_char(self._write_char, part,
                                                response=self._write_response)
 
+    async def _next_reply(self, timeout: float, expect: tuple[int, int]) -> p.Frame:
+        """Wait for one queued reply, always failing with the built-in TimeoutError.
+
+        Before 3.11 asyncio.TimeoutError is its own class rather than an alias of
+        the built-in, so letting wait_for's exception escape would slip straight
+        past the `except TimeoutError` handlers in cli.py on those versions.
+        """
+        try:
+            return await asyncio.wait_for(self._queue.get(), timeout)
+        except asyncio.TimeoutError:
+            raise TimeoutError(
+                f"no reply to {expect[0]:02X}/{expect[1]:02X}") from None
+
     async def request(self, frame: bytes, expect: tuple[int, int] | None = None,
                       timeout: float = p.COMMAND_TIMEOUT_S) -> p.Frame:
         """Send a frame and wait for the matching reply."""
@@ -198,7 +211,7 @@ class Uwatch:
             remaining = deadline - asyncio.get_running_loop().time()
             if remaining <= 0:
                 raise TimeoutError(f"no reply to {expect[0]:02X}/{expect[1]:02X}")
-            reply = await asyncio.wait_for(self._queue.get(), remaining)
+            reply = await self._next_reply(remaining, expect)
             if reply.tag == expect:
                 if reply.error:
                     raise ConnectionError_(

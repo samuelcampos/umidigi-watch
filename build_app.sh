@@ -37,9 +37,30 @@ if prefix and name:
 PYFIND
 )"
 if [ -n "$FW_APP" ]; then
-    echo "using framework interpreter $FW_APP"
+    # Only keep the swap if the result actually runs and still resolves this
+    # bundle's venv. Where several Pythons are installed (CI runners, a
+    # python.org build alongside Homebrew) sysconfig can report a framework
+    # belonging to a different installation; copying that binary out of its
+    # signed framework gets it killed outright.
+    BACKUP="$CONTENTS/MacOS/.$PY_EXE.venv"
+    cp "$CONTENTS/MacOS/$PY_EXE" "$BACKUP"
     cp "$FW_APP" "$CONTENTS/MacOS/$PY_EXE"
     chmod +x "$CONTENTS/MacOS/$PY_EXE"
+
+    WANT="$(cd "$CONTENTS" && pwd -P)"
+    GOT="$("$CONTENTS/MacOS/$PY_EXE" -c \
+        'import os, sys; print(os.path.realpath(sys.prefix))' 2>/dev/null || true)"
+
+    if [ "$GOT" = "$WANT" ]; then
+        echo "using framework interpreter $FW_APP"
+        rm -f "$BACKUP"
+    else
+        echo "warning: $FW_APP does not belong to this venv (sys.prefix=${GOT:-<killed>})" >&2
+        echo "         keeping the venv's own interpreter; if macOS denies Bluetooth," >&2
+        echo "         rebuild with PYTHON=/path/to/matching/python3" >&2
+        mv "$BACKUP" "$CONTENTS/MacOS/$PY_EXE"
+        chmod +x "$CONTENTS/MacOS/$PY_EXE"
+    fi
 fi
 
 cat > "$CONTENTS/Info.plist" <<PLIST
